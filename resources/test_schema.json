@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "ChatGpt provided",
+  "title": "Person",
+  "type": "object",
+  "required": ["id", "name", "contact", "roles"],
+  "x-tags": ["hort.main-type"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the person"
+    },
+    "name": {
+      "type": "object",
+      "required": ["first", "last"],
+      "properties": {
+        "first": {
+          "type": "string",
+          "minLength": 1
+        },
+        "middle": {
+          "type": "string"
+        },
+        "last": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "age": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 150
+    },
+    "contact": {
+      "type": "object",
+      "required": ["email"],
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "pattern": "^\\+?[1-9]\\d{1,14}$"
+        },
+        "address": {
+          "type": "object",
+          "properties": {
+            "street": { "type": "string" },
+            "city": { "type": "string" },
+            "postalCode": { "type": "string" },
+            "country": { "type": "string" }
+          }
+        }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["admin", "editor", "viewer"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "iEnum": {
+      "type": "integer",
+      "enum": [1, 2, 4, 8, 16]
+    }
+  }
+}

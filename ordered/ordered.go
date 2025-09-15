@@ -48,6 +48,30 @@ type OrderedValue struct {
 	Value any
 }
 
+func NewOrderedValue[T any](value T) (OrderedValue, error) {
+	var t ValueType
+	switch any(value).(type) {
+	case int, int32, int64:
+		t = INTEGER
+	case float32, float64:
+		t = NUMBER
+	case bool:
+		t = BOOL
+	case string:
+		t = STRING
+	case []any:
+		t = ARRAY
+	case map[string]any:
+		t = OBJECT
+	default:
+		return OrderedValue{}, fmt.Errorf("try to create instance from unsupported type: %T", value)
+	}
+	return OrderedValue{
+		Type:  t,
+		Value: value,
+	}, nil
+}
+
 func (ov *OrderedValue) ValueForKey(key string) (*OrderedValue, bool) {
 	if ov.Type != OBJECT {
 		return nil, false
