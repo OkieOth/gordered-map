@@ -1,0 +1,3 @@
+{{- range $key, $value := .Iterate }}
+{{ $key }}: {{ toText $value }}
+{{- end }}

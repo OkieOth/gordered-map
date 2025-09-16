@@ -30,6 +30,19 @@ func GetValue[T any](m *MapThing, key string) (T, bool) {
 	return *(new(T)), false
 }
 
+func HasValue(m *MapThing, key string) bool {
+	if m.entry.Type == ordered.OBJECT {
+		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
+			for _, o := range orderObject {
+				if o.Key == key {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func GetChildMap(m *MapThing, key string) (*MapThing, bool) {
 	if m.entry.Type == ordered.OBJECT {
 		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
@@ -69,6 +82,50 @@ func GetChildArray(m *MapThing, key string) (ordered.OrderedArray, bool) {
 	return nil, false
 }
 
+func GetTypedChildArray[T any](m *MapThing, key string) ([]T, bool) {
+	if m.entry.Type == ordered.OBJECT {
+		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
+			for _, o := range orderObject {
+				if o.Key == key {
+					if tInst, isT := o.Value.Value.(ordered.OrderedArray); isT {
+						ret := make([]T, 0)
+						for _, orderedValue := range tInst {
+							if v, ok := orderedValue.Value.(T); ok {
+								ret = append(ret, v)
+							}
+						}
+						return ret, true
+					} else {
+						break
+					}
+				}
+			}
+		}
+	}
+	return []T{}, false
+}
+
+func GetAnyTypedChildArray(m *MapThing, key string) ([]any, bool) {
+	if m.entry.Type == ordered.OBJECT {
+		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
+			for _, o := range orderObject {
+				if o.Key == key {
+					if tInst, isT := o.Value.Value.(ordered.OrderedArray); isT {
+						ret := make([]any, 0)
+						for _, orderedValue := range tInst {
+							ret = append(ret, orderedValue.Value)
+						}
+						return ret, true
+					} else {
+						break
+					}
+				}
+			}
+		}
+	}
+	return []any{}, false
+}
+
 func Set[T any](m *MapThing, key string, value T) error {
 	if m.entry.Type == ordered.OBJECT {
 		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
@@ -97,15 +154,66 @@ func Set[T any](m *MapThing, key string, value T) error {
 	return nil
 }
 
-func Iterate[T any](m *MapThing) iter.Seq2[string, T] {
-	return func(yield func(string, T) bool) {
+type CastFunc func(value ordered.OrderedPair) (any, bool)
+
+func OrderedPair2Value(value ordered.OrderedPair) (any, bool) {
+	return value.Value.Value, true
+}
+
+type CastFunc2[T any] func(value ordered.OrderedValue) (T, bool)
+
+func OrderedValue2Value[T any](value ordered.OrderedValue) (T, bool) {
+	if s, ok := value.Value.(T); ok {
+		return s, true
+	}
+	return *(new(T)), false
+}
+
+func (m *MapThing) Iterate() iter.Seq2[string, any] {
+	return func(yield func(string, any) bool) {
 		if m.entry.Type == ordered.OBJECT {
 			if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
 				for _, o := range orderObject {
-					if tInst, isT := o.Value.Value.(T); isT {
-						if !yield(o.Key, tInst) {
+					if !yield(o.Key, o.Value) {
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
+func ToText(v any) string {
+	bytes, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(bytes)
+}
+
+func (m *MapThing) IterateToValue(castFunc CastFunc) iter.Seq2[string, any] {
+	return func(yield func(string, any) bool) {
+		if m.entry.Type == ordered.OBJECT {
+			if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
+				for _, o := range orderObject {
+					if item, shouldReturned := castFunc(o); shouldReturned {
+						if !yield(o.Key, item) {
 							return
 						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func IterateOverArray[T any](array any, castFunc CastFunc2[T]) iter.Seq2[int, T] {
+	return func(yield func(int, T) bool) {
+		if arrayType, ok := array.(ordered.OrderedArray); ok {
+			for i, o := range arrayType {
+				if item, shouldReturned := castFunc(*o); shouldReturned {
+					if !yield(i, item) {
+						return
 					}
 				}
 			}
@@ -129,6 +237,32 @@ func NewFromJSONFile(fileName string) (*MapThing, error) {
 		return nil, fmt.Errorf("error while reading file (%s): %v", fileName, err)
 	}
 	return NewFromJSON(data)
+}
+
+func (m *MapThing) SerializeJSONFile(fileName string) error {
+	outputFile, err := os.Create(fileName)
+	if err != nil {
+		return fmt.Errorf("error while creating output file (%s): %v", fileName, err)
+	}
+	defer outputFile.Close()
+	jsonData, err := m.Serialize()
+	if err != nil {
+		return err
+	}
+	_, err = outputFile.Write(jsonData)
+	if err != nil {
+		return fmt.Errorf("error while writing output file (%s): %v", fileName, err)
+	}
+
+	return nil
+}
+
+func (m *MapThing) Serialize() ([]byte, error) {
+	jsonData, err := json.MarshalIndent(m.entry, "", "  ")
+	if err != nil {
+		return []byte{}, fmt.Errorf("error while marshal data: %v", err)
+	}
+	return jsonData, nil
 }
 
 func GetArrayLen(a ordered.OrderedArray) int {
