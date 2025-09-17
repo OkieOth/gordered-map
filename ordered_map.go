@@ -183,6 +183,24 @@ func (m *MapThing) Iterate() iter.Seq2[string, any] {
 	}
 }
 
+// helps to interate over sub dictionaries
+func (m *MapThing) IterateOverMaps() iter.Seq2[string, MapThing] {
+	return func(yield func(string, MapThing) bool) {
+		if m.entry.Type == ordered.OBJECT {
+			if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
+				for _, o := range orderObject {
+					mapThing := MapThing{
+						entry: o.Value,
+					}
+					if !yield(o.Key, mapThing) {
+						return
+					}
+				}
+			}
+		}
+	}
+}
+
 func ToText(v any) string {
 	bytes, err := json.Marshal(v)
 	if err != nil {
