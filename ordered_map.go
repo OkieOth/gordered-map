@@ -2,6 +2,7 @@ package omap
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"os"
@@ -11,6 +12,55 @@ import (
 
 type MapThing struct {
 	entry *ordered.OrderedValue
+}
+
+func NewMapThing() MapThing {
+	orderedValue := ordered.OrderedValue{
+		Type:  ordered.OBJECT,
+		Value: ordered.NewOrderedObject(),
+	}
+	return MapThing{
+		entry: &orderedValue,
+	}
+}
+
+func NewOrderedValue[T any](value T) (ordered.OrderedValue, error) {
+	var t ordered.ValueType
+	switch any(value).(type) {
+	case int, int32, int64:
+		t = ordered.INTEGER
+	case float32, float64:
+		t = ordered.NUMBER
+	case bool:
+		t = ordered.BOOL
+	case string:
+		t = ordered.STRING
+	case []any:
+		t = ordered.ARRAY
+	case map[string]any:
+		t = ordered.OBJECT
+	case ordered.OrderedObject:
+		t = ordered.OBJECT
+	case MapThing, *MapThing:
+		t = ordered.OBJECT
+		if mt, ok := any(value).(MapThing); ok {
+			return ordered.OrderedValue{
+				Type:  t,
+				Value: mt.entry.Value,
+			}, nil
+		} else if mt, ok := any(value).(*MapThing); ok {
+			return ordered.OrderedValue{
+				Type:  t,
+				Value: mt.entry.Value,
+			}, nil
+		}
+	default:
+		return ordered.OrderedValue{}, fmt.Errorf("try to create instance from unsupported type: %T", value)
+	}
+	return ordered.OrderedValue{
+		Type:  t,
+		Value: value,
+	}, nil
 }
 
 func GetValue[T any](m *MapThing, key string) (T, bool) {
@@ -129,7 +179,7 @@ func GetAnyTypedChildArray(m *MapThing, key string) ([]any, bool) {
 func Set[T any](m *MapThing, key string, value T) error {
 	if m.entry.Type == ordered.OBJECT {
 		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
-			orderedValue, err := ordered.NewOrderedValue[T](value)
+			orderedValue, err := NewOrderedValue[T](value)
 			if err != nil {
 				return fmt.Errorf("couldn't create new value for key (%s): %v", key, err)
 			}
@@ -138,6 +188,8 @@ func Set[T any](m *MapThing, key string, value T) error {
 					// existing value will be replaced
 					if _, isT := o.Value.Value.(T); isT {
 						orderObject[i].Value = &orderedValue
+					} else if o.Value.Type == orderedValue.Type { // ISSUE
+						orderObject[i].Value.Value = orderedValue.Value
 						return nil
 					} else {
 						return fmt.Errorf("key (%s) has not the requested generic type: %T", key, value)
@@ -154,6 +206,20 @@ func Set[T any](m *MapThing, key string, value T) error {
 	return nil
 }
 
+func Remove(m *MapThing, key string) {
+	if m.entry.Type == ordered.OBJECT {
+		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
+			for i, o := range orderObject {
+				if o.Key == key {
+					// existing value will be replaced
+					m.entry.Value = append(orderObject[:i], orderObject[i+1:]...)
+					return
+				}
+			}
+		}
+	}
+}
+
 type CastFunc func(value ordered.OrderedPair) (any, bool)
 
 func OrderedPair2Value(value ordered.OrderedPair) (any, bool) {
@@ -167,6 +233,15 @@ func OrderedValue2Value[T any](value ordered.OrderedValue) (T, bool) {
 		return s, true
 	}
 	return *(new(T)), false
+}
+
+func (m *MapThing) Len() (int, error) {
+	if m.entry.Type == ordered.OBJECT {
+		if orderObject, isOk := m.entry.Value.(ordered.OrderedObject); isOk {
+			return len(orderObject), nil
+		}
+	}
+	return 0, errors.New("error while checking lenght of mapThing")
 }
 
 func (m *MapThing) Iterate() iter.Seq2[string, any] {
