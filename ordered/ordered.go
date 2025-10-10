@@ -48,28 +48,8 @@ type OrderedValue struct {
 	Value any
 }
 
-func NewOrderedValue[T any](value T) (OrderedValue, error) {
-	var t ValueType
-	switch any(value).(type) {
-	case int, int32, int64:
-		t = INTEGER
-	case float32, float64:
-		t = NUMBER
-	case bool:
-		t = BOOL
-	case string:
-		t = STRING
-	case []any:
-		t = ARRAY
-	case map[string]any:
-		t = OBJECT
-	default:
-		return OrderedValue{}, fmt.Errorf("try to create instance from unsupported type: %T", value)
-	}
-	return OrderedValue{
-		Type:  t,
-		Value: value,
-	}, nil
+func NewOrderedObject() OrderedObject {
+	return OrderedObject(make([]OrderedPair, 0))
 }
 
 func (ov *OrderedValue) ValueForKey(key string) (*OrderedValue, bool) {
@@ -308,7 +288,11 @@ func (ov *OrderedValue) MarshalJSON() ([]byte, error) {
 	case NULL:
 		return []byte("null"), nil
 	case INTEGER:
-		return json.Marshal(ov.Value.(int64))
+		if _, ok := ov.Value.(int64); !ok {
+			return json.Marshal("?????")
+		} else {
+			return json.Marshal(ov.Value.(int64))
+		}
 	case NUMBER:
 		if n, ok := ov.Value.(float64); ok {
 			return json.Marshal(n)
